@@ -1,49 +1,56 @@
 #!/usr/bin/python3
-
-import sys
-import yaml
 import os
 import re
+import sys
+
+import yaml
 
 yaml.SafeDumper.org_represent_str = yaml.SafeDumper.represent_str
 
+
 def repr_str(dmp, data):
-    if '\n' in data:
-        return dmp.represent_scalar(u'tag:yaml.org,2002:str', data, style='|')
+    if "\n" in data:
+        return dmp.represent_scalar("tag:yaml.org,2002:str", data, style="|")
     return dmp.org_represent_str(data)
+
 
 yaml.add_representer(str, repr_str, Dumper=yaml.SafeDumper)
 
 # If this is a configmap, have a shot at seeing of any values are also
-# yaml, and load them as such, to normalise quotes etc
-def normalise(doc):
-    if doc['kind'] == 'ConfigMap':
-        for item in doc['data']:
+# yaml, and load them as such, to normalize quotes etc
+def normalize(doc):
+    if doc["kind"] == "ConfigMap":
+        for item in doc["data"]:
             try:
-                new_item = yaml.safe_load(doc['data'][item])
-                doc['data'][item] = new_item
-            except:
+                new_item = yaml.safe_load(doc["data"][item])
+                doc["data"][item] = new_item
+            except yaml.YAMLError:
                 pass
     return doc
+
 
 def extract(fname, doc):
     of = os.path.splitext(fname)[0]
     if not os.path.isdir(of):
         os.mkdir(of, 0o0755)
-    ver = re.sub('/', '-', doc['apiVersion'])
-    if 'namespace' in doc['metadata']:
-        ofname = os.path.join(of, f"{ver}-{doc['kind']}-{doc['metadata']['namespace']}-{doc['metadata']['name']}.yaml")
+    ver = re.sub("/", "-", doc["apiVersion"])
+    if "namespace" in doc["metadata"]:
+        ofname = os.path.join(
+            of,
+            f"{ver}-{doc['kind']}-{doc['metadata']['namespace']}-{doc['metadata']['name']}.yaml",
+        )
     else:
         ofname = os.path.join(of, f"{ver}-{doc['kind']}-{doc['metadata']['name']}.yaml")
-    with open(ofname, 'w') as stream:
+    with open(ofname, "w") as stream:
         print("---", file=stream)
         print(yaml.safe_dump(doc, default_flow_style=False), file=stream)
 
+
 for fname in sys.argv[1:]:
-    with open(fname, 'r') as stream:
+    with open(fname) as stream:
         try:
             for doc in yaml.safe_load_all(stream):
-                doc = normalise(doc)
+                doc = normalize(doc)
                 extract(fname, doc)
         except yaml.YAMLError as exc:
             print(f"Error parsing input {fname} :: {exc}", file=sys.stderr)
